@@ -2,6 +2,7 @@ local menubar = hs.menubar.new()
 local menuData = {}
 local urlPath = '/.workspaces'
 local urlFile = '/urls.txt'
+local urlFileChrome = '/chromeurls.txt'
 local currentWS = 0
 local defaultWS_name = 'defaultws' 
 local defaultWS_index = 0;
@@ -45,15 +46,42 @@ function getQueryFolder()
 end
 
 function openWorkSpaceURLs(WSindex)
-    if currentWS == WSindex then
+    if currentWS == WSindex and currentWS ~= defaultWS_index then
         return
     end
     hs.alert.show('Open '..queryFolder[WSindex]['name']..' Work Space.')
     for url in io.lines(queryFolder[WSindex]['dir']..urlFile) do
         hs.urlevent.openURLWithBundle(url, 'com.apple.Safari')
     end
+    for url in io.lines(queryFolder[WSindex]['dir']..urlFileChrome) do
+        hs.urlevent.openURLWithBundle(url, 'com.google.Chrome')
+    end
     currentWS = WSindex
     updateMenubar()
+end
+
+function getChromeURLs()
+    local js =
+        [[
+            var datastr = "";
+            var gg = Application('Chrome');
+            if(gg.running){
+                const firstWindow = gg.windows[0]
+                var alltabs = firstWindow.tabs
+                var tabLen = alltabs.length		
+                for (var i = 0; i < tabLen; i++) {
+                    var name = alltabs[i].url() + "\n"
+                    datastr += name;
+                }	
+            }
+            datastr;
+        ]]
+    local status, object, descriptor = hs.osascript.javascript(js)
+    if status == true then
+        return object
+    else
+        return ''
+    end
 end
 
 function getSafariURLs()
@@ -84,29 +112,41 @@ function saveSafariURLs(content, ws_index)
         local file_handler = io.open(queryFolder[ws_index]['dir']..urlFile, 'w');
         file_handler:write(content);
         file_handler:close();
-        closeSafariApp();
+    end
+end
+
+function saveChromeURLs(content, ws_index)
+    if ws_index > 0 and ws_index <= #queryFolder then
+        local file_handler = io.open(queryFolder[ws_index]['dir']..urlFileChrome, 'w');
+        file_handler:write(content);
+        file_handler:close();
     end
 end
 
 function closeSafariApp()
     local app = hs.application.get('Safari')
+    app:kill()
+end
 
+function closeChromeApp()
+    local app = hs.application.get('Google Chrome')
     app:kill()
 end
 
 function saveWorkSpace()
     -- file = io.open(os.getenv('HOME') .. urlPath)
     local ret = getSafariURLs();
-    saveSafariURLs(ret, currentWS)
-    -- hs.alert.show('Save Work Space.')
-    -- currentWS = 0
-    -- updateMenubar()
+    local ret1 = getChromeURLs();
+    saveSafariURLs(ret, currentWS);
+    saveChromeURLs(ret1, currentWS);
 end
 
 function closeWorkSpace()
     hs.alert.show('Close Work Space');
     -- openWorkSpaceURLs(defaultWS_index);
     saveWorkSpace();
+    closeSafariApp();
+    closeChromeApp();
     currentWS = defaultWS_index;
     updateMenubar()
 end
@@ -159,6 +199,10 @@ function rescan()
     table.insert( menuitems_table, {
         title = 'Reload WorkSpace',
         fn = function() reloadWorkSpace() end
+    })
+    table.insert( menuitems_table, {
+        title = 'test item',
+        fn = function() closeChromeApp() end
     })
 
     menubar:setMenu(menuitems_table)
