@@ -1,8 +1,9 @@
 local menubar = hs.menubar.new()
 local menuData = {}
 local urlPath = '/.workspaces'
-local urlFile = '/urls.txt'
-local urlFileChrome = '/chromeurls.txt'
+local urlFile = 'urls.txt'
+local urlFileChrome = 'chromeurls.txt'
+local shellCommandFile = 'ws_command.sh'
 local currentWS = 0
 local defaultWS_name = 'defaultws' 
 local defaultWS_index = 0;
@@ -50,14 +51,46 @@ function openWorkSpaceURLs(WSindex)
         return
     end
     hs.alert.show('Open '..queryFolder[WSindex]['name']..' Work Space.')
-    for url in io.lines(queryFolder[WSindex]['dir']..urlFile) do
-        hs.urlevent.openURLWithBundle(url, 'com.apple.Safari')
+    local fileInfo = hs.fs.attributes(queryFolder[WSindex]['dir'] .. '/' .. urlFile)
+    if fileInfo ~= nil and fileInfo.mode == 'file' then
+        for url in io.lines(queryFolder[WSindex]['dir']..'/'..urlFile) do
+            hs.urlevent.openURLWithBundle(url, 'com.apple.Safari')
+        end
+    else
+        print(queryFolder[WSindex]['dir']..'/'..urlFile..' not found.')
     end
-    for url in io.lines(queryFolder[WSindex]['dir']..urlFileChrome) do
-        hs.urlevent.openURLWithBundle(url, 'com.google.Chrome')
+
+    fileInfo = hs.fs.attributes(queryFolder[WSindex]['dir']..'/'..urlFileChrome)
+    if fileInfo ~= nil and fileInfo.mode == 'file' then
+        for url in io.lines(queryFolder[WSindex]['dir']..'/'..urlFileChrome) do
+            hs.urlevent.openURLWithBundle(url, 'com.google.Chrome')
+        end
+    else
+        print(queryFolder[WSindex]['dir']..'/'..urlFileChrome..' not found.')
     end
+
     currentWS = WSindex
     updateMenubar()
+end
+
+function openWorkSpace(WSindex)
+    openWorkSpaceURLs(WSindex)
+    runWorkSpaceCMDs(WSindex)
+end
+
+function shell(cmd)
+    result = hs.osascript.applescript(string.format('do shell script "%s"', cmd))
+end
+
+function runWorkSpaceCMDs(WSindex)
+    local fileInfo = hs.fs.attributes(queryFolder[WSindex]['dir'] .. '/' .. shellCommandFile)
+    if fileInfo == nil then
+        print(queryFolder[WSindex]['dir']..'/'..shellCommandFile..' not found.')
+        return
+    end
+    local cmd = 'cd '..queryFolder[WSindex]['dir']..' && source '..shellCommandFile 
+    print(cmd)
+    shell(cmd)
 end
 
 function getChromeURLs()
@@ -109,7 +142,7 @@ end
 
 function saveSafariURLs(content, ws_index)
     if ws_index > 0 and ws_index <= #queryFolder then
-        local file_handler = io.open(queryFolder[ws_index]['dir']..urlFile, 'w');
+        local file_handler = io.open(queryFolder[ws_index]['dir']..'/'..urlFile, 'w');
         file_handler:write(content);
         file_handler:close();
     end
@@ -117,7 +150,7 @@ end
 
 function saveChromeURLs(content, ws_index)
     if ws_index > 0 and ws_index <= #queryFolder then
-        local file_handler = io.open(queryFolder[ws_index]['dir']..urlFileChrome, 'w');
+        local file_handler = io.open(queryFolder[ws_index]['dir']..'/'..urlFileChrome, 'w');
         file_handler:write(content);
         file_handler:close();
     end
@@ -143,7 +176,6 @@ end
 
 function closeWorkSpace()
     hs.alert.show('Close Work Space');
-    -- openWorkSpaceURLs(defaultWS_index);
     saveWorkSpace();
     closeSafariApp();
     closeChromeApp();
@@ -175,7 +207,7 @@ function rescan()
         if queryFolder[i]['defaultws'] == false then
             table.insert(submenuitem_table, {
                 title = queryFolder[i]['name'],
-                fn = function() openWorkSpaceURLs(i) end
+                fn = function() openWorkSpace(i) end
             })
         else
             defaultWS_index = i;
@@ -202,7 +234,7 @@ function rescan()
     })
     table.insert( menuitems_table, {
         title = 'test item',
-        fn = function() closeChromeApp() end
+        fn = function() openWorkSpace(1) end
     })
 
     menubar:setMenu(menuitems_table)
